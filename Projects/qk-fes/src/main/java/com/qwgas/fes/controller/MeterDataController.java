@@ -1,5 +1,6 @@
 package com.qwgas.fes.controller;
 
+import com.alibaba.fastjson.JSONObject;
 import com.qwgas.fes.response.FesResponse;
 import com.qwgas.fes.service.MeterDataService;
 import com.qwgas.fes.vo.MetreInfoVo;
@@ -43,7 +44,7 @@ public class MeterDataController {
      * @return
      */
     @ApiOperation("开关阀")
-    @PostMapping(value = "valveOpera", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
+    @PostMapping(value = "valveOperate", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
     public FesResponse valveOpera(@RequestBody ValveOperateParam valveOperateParam) {
         return meterDataService.valveOpera(valveOperateParam);
     }
@@ -94,14 +95,14 @@ public class MeterDataController {
     }
 
     /**
-     * post 表具开通
+     * post 上报数据
      *
      * @return
      */
-    @ApiOperation("表具开通")
-    @PostMapping(value = "openAccount", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
-    public FesResponse openAccount(@RequestBody OpenAccountParam openAccountParam) {
-        return meterDataService.openAccount(openAccountParam);
+    @ApiOperation("上报数据")
+    @PostMapping(value = "meterDataUp", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
+    public FesResponse meterDataUp(@RequestBody JSONObject jsonObject) {
+        return meterDataService.meterDataUp(jsonObject);
     }
 
     /**
@@ -147,4 +148,17 @@ public class MeterDataController {
     public FesResponse dataSupplement(@RequestBody DataSupplementParam dataSupplementParam) {
         return meterDataService.dataSupplement(dataSupplementParam);
     }
+
+
+    /**
+     * post 报警上报数据
+     *
+     * @return
+     */
+    @ApiOperation("报警上报数据")
+    @PostMapping(value = "sendAlarm", produces = MediaType.APPLICATION_JSON_UTF8_VALUE)
+    public FesResponse sendAlarm(@RequestBody JSONObject jsonObject) {
+        return meterDataService.sendAlarm(jsonObject);
+    }
+
 }

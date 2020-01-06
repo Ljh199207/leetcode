@@ -14,18 +14,15 @@ public class MeterInfoParam implements Serializable {
     /**
      * 表具号
      */
-    @NotNull
     private String meterNo;
 
     /**
      * 用户号
      */
-    @NotNull
     private String userNo;
     /**
      * 用户名
      */
-    @NotNull
     private String userName;
     /**
      * 集中器编号/通讯号
@@ -40,13 +37,11 @@ public class MeterInfoParam implements Serializable {
     /**
      * 表具型号，为表厂分配的表具型号
      */
-    @NotNull
     private String meterType;
     /**
      * 地址(内容包含 街道、小区、楼栋、门牌
      * 号)
      */
-    @NotNull
     private String addrDes;
 
     /**

@@ -27,10 +27,10 @@ public class Swagger2 {
     @Bean
     public Docket createRestApi() {
         //添加head参数start
-        ParameterBuilder tokenPar = new ParameterBuilder();
-        List<Parameter> pars = new ArrayList<Parameter>();
-        tokenPar.name("x-auth-token").description("令牌").modelRef(new ModelRef("string")).parameterType("header").required(false).build();
-        pars.add((Parameter) tokenPar.build());
+        //ParameterBuilder tokenPar = new ParameterBuilder();
+        //List<Parameter> pars = new ArrayList<Parameter>();
+        //tokenPar.name("x-auth-token").description("令牌").modelRef(new ModelRef("string")).parameterType("header").required(false).build();
+        //pars.add((Parameter) tokenPar.build());
         //添加head参数end
 
 
@@ -39,8 +39,8 @@ public class Swagger2 {
                 .select()
                 .apis(RequestHandlerSelectors.basePackage("com.qwgas.fes"))
                 .paths(PathSelectors.any())
-                .build()
-                .globalOperationParameters(pars);
+                .build();
+                //.globalOperationParameters(pars);
     }
 
     private ApiInfo apiInfo() {

@@ -1,5 +1,6 @@
 package com.qwgas.fes.service;
 
+import com.alibaba.fastjson.JSONObject;
 import com.qwgas.fes.response.FesResponse;
 import com.qwgas.fes.vo.MetreInfoVo;
 import com.qwgas.fes.vo.param.*;
@@ -23,11 +24,13 @@ public interface MeterDataService {
 
     FesResponse meterInfo(MeterInfoParam metreInfoVo);
 
-    FesResponse openAccount(OpenAccountParam openAccountParam);
-
     FesResponse setParameter(ParameterUpParam parameterUpParam);
 
     FesResponse getParameter(ParameterParam parameterParam);
 
     FesResponse dataSupplement(DataSupplementParam dataSupplementParam);
+
+    FesResponse meterDataUp(JSONObject jsonObject);
+
+    FesResponse sendAlarm(JSONObject jsonObject);
 }

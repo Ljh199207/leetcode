@@ -11,7 +11,6 @@ import org.springframework.context.annotation.PropertySource;
  */
 @Configuration
 @ConfigurationProperties(prefix = "api")
-@PropertySource("classpath:api.properties")
 @Data
 public class ApiParam {
     /**
@@ -81,4 +80,40 @@ public class ApiParam {
      * 表具开通(威星表厂)
      */
     private String openAccount;
+
+    /**
+     * 获取参数
+     *
+     */
+    private  String gParameter;
+    /**
+     * 设置参数
+     *
+     */
+    private  String sParameter;
+
+    /**
+     * 充值返回
+     *
+     */
+    private  String returnRecharge;
+
+    /**
+     * 返回地址
+     */
+   private String returnUrl;
+
+    /**
+     * 返回参数读取
+     */
+    private String returnParam;
+    /**
+     * 取消充值上报
+     */
+    private String returnCancel;
+
+    /**
+     * 数据上报
+     */
+    private String returnDataUp;
 }

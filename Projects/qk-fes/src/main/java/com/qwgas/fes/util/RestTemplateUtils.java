@@ -1,6 +1,7 @@
 package com.qwgas.fes.util;
 
 import com.alibaba.fastjson.JSONObject;
+import com.qwgas.fes.service.CommonService;
 import com.qwgas.fes.vo.param.ValveOperate;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.*;
@@ -30,6 +31,8 @@ public class RestTemplateUtils {
 
     @Autowired
     private RestTemplate restTemplate;
+    @Autowired
+    private CommonService commonService;
 
     public HttpEntity getHeader() {
         HttpHeaders headers = new HttpHeaders();
@@ -38,12 +41,15 @@ public class RestTemplateUtils {
         return requestEntity;
     }
 
+
     public String getToken(){
         RequestAttributes requestAttributes = RequestContextHolder.currentRequestAttributes();
         HttpServletRequest request = ((ServletRequestAttributes) requestAttributes).getRequest();
         String token = request.getHeader("x-auth-token");
         return token;
     }
+
+
 
     public ResponseEntity get(String url) {
         return restTemplate.exchange(url, HttpMethod.GET, getHeader(), JSONObject.class);

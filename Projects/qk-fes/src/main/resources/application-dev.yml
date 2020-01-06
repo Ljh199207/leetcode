@@ -1,0 +1,24 @@
+spring:
+  redis:
+    host: localhost
+    port: 6379
+appId: WZQWApp
+appSecrect: MIGfMA0GCSqGSIb3D4HQ632qJBVHf8sxHi/fEsraprwCtzvzQETrNRwVxLO5jVmRGi60j8Ue1efIlzPXV9je9mkjzOmdssymZkh2QhUrCmZYI/FCEa3/cNMW0QIDAQAB
+api:
+  serviceId: 64513b948eba43f5891c80998438c194
+  serviceSecret: 0b8dba77f01d441da1063cd148135212
+  dccUrl: http://dev.dcc.qwgas.com:8083
+  tokenUrl: /api/umc/token
+  searchMetreInfo: /api/dcc/meter/{meterNo}/info
+  valveOpera: /api/dcc/meter/{meterNo}/valve
+  recharge: /api/dcc/meter/{meterNo}/recharge
+  changePrice: /api/dcc/meter/{meterNo}/gas-price
+  gParameter: /api/dcc/meter/{meterNo}/getParameter
+  sParameter: /api/dcc/meter/{meterNo}/setParameter
+  updatePriceAndBalance: /api/dcc/meter/{meterNo}/updatePriceAndBalance
+  returnUrl: http://60.190.252.117:30348
+  returnRecharge: /rest/v1/collectionPlatform/rechargeUp
+  returnParam: /rest/v1/collectionPlatform/parameterUp
+  returnCancel: /rest/v1/collectionPlatform/cancelRechargeUp
+  returnDataUp: /rest/v1/collectionPlatform/meterDataUp
+  sendAlarm: /v1/collectionPlatform/sendAlarm

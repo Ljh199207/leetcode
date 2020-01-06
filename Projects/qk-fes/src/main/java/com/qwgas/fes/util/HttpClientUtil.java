@@ -1,5 +1,6 @@
 package com.qwgas.fes.util;
 
+import com.qwgas.fes.config.SecrectConfig;
 import org.apache.http.HttpEntity;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.config.RequestConfig;
@@ -10,15 +11,26 @@ import org.apache.http.impl.client.HttpClients;
 import org.apache.http.util.EntityUtils;
 import org.apache.log4j.BasicConfigurator;
 import org.apache.log4j.Logger;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Base64;
+import java.util.Date;
 
 
 @Component
 public class HttpClientUtil {
 
-    private static Logger logger  = Logger.getLogger(HttpClientUtil.class);
+    private static Logger logger = Logger.getLogger(HttpClientUtil.class);
+    public static SecrectConfig secrectConfig;
+
+    @Autowired
+    public void setMySecretKey(SecrectConfig secretKey) {
+        secrectConfig = secretKey;
+    }
+
 
     /**
      * 原生字符串发送get请求
@@ -122,6 +134,68 @@ public class HttpClientUtil {
         }
         return null;
     }
+
+
+    /**
+     * 原生字符串发送post请求
+     *
+     * @param url
+     * @param jsonStr
+     * @return
+     * @throws IOException
+     */
+    public static String returnPost(String url, String jsonStr) {
+
+        CloseableHttpClient httpClient = HttpClients.createDefault();
+        HttpPost httpPost = new HttpPost(url);
+        RequestConfig requestConfig = RequestConfig.custom().setConnectTimeout(35000).setConnectionRequestTimeout(35000).setSocketTimeout(60000).build();
+        httpPost.setConfig(requestConfig);
+        httpPost.setHeader("Content-type", "application/json");
+        httpPost.setHeader("DataEncoding", "UTF-8");
+        // httpPost.setHeader("AppID", "WZQWApp");
+        SimpleDateFormat formatter = new SimpleDateFormat("yyyyMMddHHmmss");
+        Date curDate = new Date(System.currentTimeMillis());//获取当前时间
+        String str = formatter.format(curDate);
+        //System.out.println(str);
+        //String appId = "WZQWApp";
+        //String appSecrect = "MIGfMA0GCSqGSIb3D4HQ632qJBVHf8sxHi/fEsraprwCtzvzQETrNRwVxLO5jVmRGi60j8Ue1efIlzPXV9je9mkjzOmdssymZkh2QhUrCmZYI/FCEa3/cNMW0QIDAQAB";
+        String AccessToken = MD5Util.MD5_32((secrectConfig.getAppId() + secrectConfig.getAppSecrect() + str));
+        String Authorization = Base64.getEncoder().encodeToString((secrectConfig.getAppId() + ":" + str).getBytes());
+        httpPost.setHeader("AccessToken", AccessToken);
+        httpPost.setHeader("Authorization", Authorization);
+        CloseableHttpResponse httpResponse = null;
+        try {
+            httpPost.setEntity(new StringEntity(jsonStr));
+            httpResponse = httpClient.execute(httpPost);
+            HttpEntity entity = httpResponse.getEntity();
+            String result = EntityUtils.toString(entity);
+            return result;
+        } catch (ClientProtocolException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } catch (IOException e) {
+            // TODO Auto-generated catch block
+            e.printStackTrace();
+        } finally {
+            if (httpResponse != null) {
+                try {
+                    httpResponse.close();
+                } catch (IOException e) {
+                    // TODO Auto-generated catch block
+                    e.printStackTrace();
+                }
+            }
+            if (null != httpClient) {
+                try {
+                    httpClient.close();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }
+        return null;
+    }
+
 
     /**
      * 原生字符串发送put请求

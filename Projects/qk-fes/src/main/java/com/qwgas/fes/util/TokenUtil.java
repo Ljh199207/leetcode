@@ -1,49 +1,45 @@
-package com.qwgas.fes.service.impl;
+package com.qwgas.fes.util;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
 import com.qwgas.fes.config.ApiParam;
 import com.qwgas.fes.response.FesResponse;
-import com.qwgas.fes.service.CommonService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Component;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.util.UriComponentsBuilder;
 
-import javax.annotation.Resource;
 import java.util.Map;
 import java.util.Optional;
 
-/**
- * @author ljh
- * @date 2019-12-09 16:36
- */
-@Service
-public class CommonServiceImpl implements CommonService {
-    @Resource
-    private ApiParam apiParam;
-    @Autowired
-    private RestTemplate restTemplate;
+@Component
+public class TokenUtil {
 
-    /**
-     * @param jsonParam
-     * @return
-     */
-    @Override
-    public FesResponse getToken(JSONObject jsonParam) throws Exception {
+    public static ApiParam apiParam;
+
+    private static RestTemplate restTemplate;
+
+    @Autowired
+    public void setApiParam(ApiParam api, RestTemplate rest) {
+        apiParam = api;
+        restTemplate = rest;
+    }
+    public static String getToken() {
+        JSONObject jsonParam = new JSONObject();
+        jsonParam.put("serviceId", apiParam.getServiceId());
+        jsonParam.put("serviceSecret", apiParam.getServiceSecret());
         String tokenUrl = apiParam.getDccUrl() + apiParam.getTokenUrl();
         UriComponentsBuilder builder = UriComponentsBuilder.fromHttpUrl(tokenUrl);
         HttpEntity<MultiValueMap<String, Object>> request = new HttpEntity(null, new HttpHeaders());
         Map<String, String> params = JSONObject.parseObject(JSONObject.toJSONString(jsonParam), Map.class);
         //如果存在參數
         if (!params.isEmpty()) {
-            for (Map.Entry<String, String> e :
-                    params.entrySet()) {
+            for (Map.Entry<String, String> e : params.entrySet()) {
                 //构建查询参数
                 builder.queryParam(e.getKey(), e.getValue());
             }
@@ -51,18 +47,15 @@ public class CommonServiceImpl implements CommonService {
             String reallyUrl = builder.build().toString();
             ResponseEntity<String> responseEntity = restTemplate.exchange(reallyUrl, HttpMethod.GET, request, String.class);
             FesResponse fesResponse = new FesResponse();
-            Optional.ofNullable(responseEntity)
+           String token = Optional.ofNullable(responseEntity)
                     .flatMap(obj -> Optional.ofNullable(obj.getBody()))
                     .flatMap(jsonObj -> {
-                        fesResponse.message(Optional.ofNullable(JSON.parseObject(jsonObj.toString()).getString("message")).orElse(""));
-                        fesResponse.put("returnCode",Optional.ofNullable(JSON.parseObject(jsonObj.toString()).getString("code")).get());
                         return Optional.ofNullable(JSON.parseObject(jsonObj.toString()).getJSONObject("data"));
                     })
                     .flatMap(jsonObj -> {
-                        fesResponse.success().put("token", Optional.ofNullable(jsonObj.getString("token")).orElse(""));
                         return Optional.ofNullable(jsonObj.getString("token"));
-                    });
-            return fesResponse;
+                    }).get();
+            return token;
         } else {
             return null;
         }

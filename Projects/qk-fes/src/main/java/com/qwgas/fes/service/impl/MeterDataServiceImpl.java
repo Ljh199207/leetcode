@@ -6,18 +6,17 @@ import com.alibaba.fastjson.serializer.SerializerFeature;
 import com.qwgas.fes.config.ApiParam;
 import com.qwgas.fes.response.FesResponse;
 import com.qwgas.fes.service.MeterDataService;
-import com.qwgas.fes.util.FesResponseUtil;
-import com.qwgas.fes.util.HttpClientUtil;
-import com.qwgas.fes.util.ParserUtil;
-import com.qwgas.fes.util.RestTemplateUtils;
+import com.qwgas.fes.util.*;
 import com.qwgas.fes.vo.MetreInfoVo;
 import com.qwgas.fes.vo.dcc.GasPriceApiVO;
+import com.qwgas.fes.vo.dcc.PriceAndBalanceApiVo;
 import com.qwgas.fes.vo.dcc.RechargeApiVO;
 import com.qwgas.fes.vo.dcc.SearchMeter;
 import com.qwgas.fes.vo.mapToStruct.MetreInfoVoConvter;
 import com.qwgas.fes.vo.param.*;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
@@ -25,12 +24,18 @@ import org.springframework.web.client.RestTemplate;
 import javax.annotation.Resource;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.Date;
+import java.util.List;
 import java.util.Optional;
 
 @Service
 public class MeterDataServiceImpl implements MeterDataService {
 
+    @Resource
+    private RedisTemplate<String, Object> redisTemplate;
 
     @Resource
     private final ApiParam apiParam;
@@ -94,31 +99,35 @@ public class MeterDataServiceImpl implements MeterDataService {
                     valveOperate.setType("2");
             }
         }
-        String s = HttpClientUtil.doPut(url2, restTemplateUtils.getToken(), JSON.toJSONString(valveOperate));
+        String s = HttpClientUtil.doPut(url2, TokenUtil.getToken(), JSONObject.toJSONString(valveOperate));
         System.out.println(s);
-        JSONObject jsonObject = JSONObject.parseObject(s);
-        ResultParam resultParam = new ResultParam();
+        try {
+            JSONObject jsonObject = JSONObject.parseObject(s);
+            ResultParam resultParam = new ResultParam();
 
-        if (jsonObject.containsKey("code") && ("0").equals(jsonObject.getString("code"))) {
-            resultParam.setResultCode("00");
-        } else {
-            resultParam.setResultCode("01");
+            if (jsonObject.containsKey("code") && ("0").equals(jsonObject.getString("code"))) {
+                resultParam.setResultCode("00");
+            } else {
+                resultParam.setResultCode("01");
+            }
+            String commandId = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getJSONObject("data")))
+                    .flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("commandId"))).orElse("");
+            resultParam.setCommandSeq(commandId);
+            resultParam.setMeterNo(valveOperateParam.getMeterNo());
+            resultParam.setMeterType(valveOperateParam.getMeterType());
+            resultParam.setFactoryCode(valveOperateParam.getFactoryCode());
+           /* // todo 开阀 返回操作
+            if (("0").equals(valveOperateParam.getValveOperate())) {
+                String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl()+apiParam.getr, restTemplateUtils.getToken(), JSON.toJSONString(resultParam));
+            }
+            // todo 关阀 返回操作
+            else {
+                String ss = HttpClientUtil.returnPost("http://localhost:8080/tes", restTemplateUtils.getToken(), JSON.toJSONString(resultParam));
+            }*/
+            return FesResponseUtil.fesResponse(s);
+        } catch (Exception e) {
+            return new FesResponse().fail().message(e.getMessage());
         }
-        String commandId = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getJSONObject("data")))
-                .flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("commandId"))).orElse("");
-        resultParam.setCommandSeq(commandId);
-        resultParam.setMeterNo(valveOperateParam.getMeterNo());
-        resultParam.setMeterType(valveOperateParam.getMeterType());
-        resultParam.setFactoryCode(valveOperateParam.getFactoryCode());
-        // todo 开阀 返回操作
-        if (("0").equals(valveOperateParam.getValveOperate())) {
-            String ss = HttpClientUtil.doPost("http://localhost:8080/tes", restTemplateUtils.getToken(), JSON.toJSONString(resultParam));
-        }
-        // todo 关阀 返回操作
-        else {
-            String ss = HttpClientUtil.doPost("http://localhost:8080/tes", restTemplateUtils.getToken(), JSON.toJSONString(resultParam));
-        }
-        return FesResponseUtil.fesResponse(s);
     }
 
     /**
@@ -138,20 +147,32 @@ public class MeterDataServiceImpl implements MeterDataService {
             rechargeApiVO.setRechargeType(1);
         }
         rechargeApiVO.setAmount(Double.valueOf(rechargeParam.getRechargeNum()));
-        String s = HttpClientUtil.doPost(url2, restTemplateUtils.getToken(), JSON.toJSONString(rechargeApiVO));
+        String s = HttpClientUtil.doPost(url2, TokenUtil.getToken(), JSON.toJSONString(rechargeApiVO));
         System.out.println(s);
-        JSONObject jsonObject = JSONObject.parseObject(s);
-        //todo 返回数据
-        RechargeUpParam rechargeUpParam = new RechargeUpParam();
-        String commandId = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getJSONObject("data")))
-                .flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("commandId"))).orElse("");
-        rechargeUpParam.setCommandSeq(commandId);
-        rechargeUpParam.setFactoryCode(rechargeParam.getFactoryCode());
-        rechargeUpParam.setMeterNo(rechargeParam.getMeterNo());
-        rechargeUpParam.setMeterType(rechargeParam.getMeterNo());
-        String ss = HttpClientUtil.doPost("http://localhost:8080/tes", restTemplateUtils.getToken(), JSON.toJSONString(rechargeUpParam, SerializerFeature.WriteMapNullValue));
-        System.out.println(ss);
-        return FesResponseUtil.fesResponse(s);
+        try {
+            JSONObject jsonObject = JSONObject.parseObject(s);
+            //todo 返回数据
+            RechargeUpParam rechargeUpParam = new RechargeUpParam();
+            String commandId = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getJSONObject("data")))
+                    .flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("commandId"))).orElse("");
+            rechargeUpParam.setCommandSeq(commandId);
+            rechargeUpParam.setFactoryCode(rechargeParam.getFactoryCode());
+            rechargeUpParam.setMeterNo(rechargeParam.getMeterNo());
+            rechargeUpParam.setMeterType(rechargeParam.getMeterNo());
+            rechargeUpParam.setTradeNo(rechargeParam.getTradeNo());
+            rechargeUpParam.setRechargeNum(rechargeParam.getRechargeNum());
+            rechargeUpParam.setMeterBalanceAmt(rechargeParam.getMeterBalanceAmt());
+            rechargeUpParam.setResultCode("0000");
+            try {
+                String ss = HttpClientUtil.doPost(apiParam.getReturnUrl() + apiParam.getReturnRecharge(), TokenUtil.getToken(), JSON.toJSONString(rechargeUpParam, SerializerFeature.WriteMapNullValue));
+                System.out.println(ss);
+            } catch (Exception e) {
+            } finally {
+                return new FesResponse().success().data(rechargeParam);
+            }
+        } catch (Exception e) {
+            return new FesResponse().fail().message(e.getMessage());
+        }
     }
 
     @Override
@@ -166,10 +187,10 @@ public class MeterDataServiceImpl implements MeterDataService {
         }
         gasPriceApiVO.setTieredChargingCycle(Integer.valueOf(changepriceParam.getBillingCycl()));
         if (StringUtils.isNotBlank(changepriceParam.getCycleStartDat())) {
-            SimpleDateFormat sdf1=new SimpleDateFormat("yyyy-MM-dd");
-            Date date=sdf1.parse(changepriceParam.getCycleStartDat());
-            SimpleDateFormat sdf2=new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-            String str=sdf2.format(date);
+            SimpleDateFormat sdf1 = new SimpleDateFormat("yyyy-MM-dd");
+            Date date = sdf1.parse(changepriceParam.getCycleStartDat());
+            SimpleDateFormat sdf2 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
+            String str = sdf2.format(date);
             gasPriceApiVO.setChargingBeginTime(str);
         } else if (StringUtils.isNotBlank(changepriceParam.getEffectiveDate())) {
             gasPriceApiVO.setChargingBeginTime(changepriceParam.getEffectiveDate());
@@ -191,14 +212,14 @@ public class MeterDataServiceImpl implements MeterDataService {
         if (StringUtils.isNotBlank(changepriceParam.getLevel4())) {
             gasPriceApiVO.setTierGas4(changepriceParam.getLevel4());
         }
-        String s = HttpClientUtil.doPut(url2, restTemplateUtils.getToken(), JSON.toJSONString(gasPriceApiVO));
+        String s = HttpClientUtil.doPut(url2, TokenUtil.getToken(), JSON.toJSONString(gasPriceApiVO));
 
         // todo  返回数据
         ResultParam resultParam = new ResultParam();
         resultParam.setMeterType(changepriceParam.getMeterType());
         resultParam.setMeterNo(changepriceParam.getMeterNo());
         resultParam.setFactoryCode("");
-        String ss = HttpClientUtil.doPut("http://localhost:8080/tes", restTemplateUtils.getToken(), JSON.toJSONString(gasPriceApiVO));
+        //String ss = HttpClientUtil.returnPost("http://60.190.252.117:30348/rest/v1/collectionPlatform/rechargeUp", JSON.toJSONString(gasPriceApiVO));
 
         System.out.println(s);
         return FesResponseUtil.fesResponse(s);
@@ -208,10 +229,16 @@ public class MeterDataServiceImpl implements MeterDataService {
     public FesResponse updatePriceAndBalan(UpdatePriceAndBalance updatePriceAndBalance) {
         String url = apiParam.getDccUrl() + apiParam.getUpdatePriceAndBalance();
         String url2 = ParserUtil.parse("{", "}", url, updatePriceAndBalance.getMeterNo());
-        String s = HttpClientUtil.doPost(url2, restTemplateUtils.getToken(), JSON.toJSONString(updatePriceAndBalance));
+        PriceAndBalanceApiVo andBalanceApiVo = new PriceAndBalanceApiVo();
+        andBalanceApiVo.setMeterType(updatePriceAndBalance.getMeterType());
+        andBalanceApiVo.setBalanceAmt(StringUtils.isNotBlank(updatePriceAndBalance.getBalanceAmt()) ? Double.valueOf(updatePriceAndBalance.getBalanceAmt()) : 0.0);
+        andBalanceApiVo.setPrice(StringUtils.isNotBlank(updatePriceAndBalance.getPrice()) ? Double.valueOf(updatePriceAndBalance.getPrice()) : 0.0);
+        andBalanceApiVo.setCommandId(updatePriceAndBalance.getCommandSeq());
+        andBalanceApiVo.setTotalUseAmt(StringUtils.isNotBlank(updatePriceAndBalance.getTotalUseAmt()) ? Double.valueOf(updatePriceAndBalance.getTotalUseAmt()) : 0.0);
+        String s = HttpClientUtil.doPost(url2, TokenUtil.getToken(), JSON.toJSONString(andBalanceApiVo));
         // todo  返回数据
-
-        return null;
+        System.out.println(s);
+        return FesResponseUtil.fesResponse(s);
     }
 
     @Override
@@ -222,7 +249,7 @@ public class MeterDataServiceImpl implements MeterDataService {
         //冲正，取消充值
         rechargeApiVO.setMode(2);
         rechargeApiVO.setAmount(Double.valueOf(rechargeParam.getRechargeNum()));
-        String s = HttpClientUtil.doPost(url2, restTemplateUtils.getToken(), JSON.toJSONString(rechargeApiVO));
+        String s = HttpClientUtil.doPost(url2, TokenUtil.getToken(), JSON.toJSONString(rechargeApiVO));
         //todo 返回数据
         RechargeUpParam rechargeUpParam = new RechargeUpParam();
         JSONObject jsonObject = JSONObject.parseObject(s);
@@ -233,34 +260,171 @@ public class MeterDataServiceImpl implements MeterDataService {
         rechargeUpParam.setFactoryCode(rechargeParam.getFactoryCode());
         rechargeUpParam.setMeterNo(rechargeParam.getMeterNo());
         rechargeUpParam.setMeterType(rechargeParam.getMeterNo());
-        String ss = HttpClientUtil.doPost("http://localhost:8080/tes", restTemplateUtils.getToken(), JSON.toJSONString(rechargeUpParam));
+        //String ss = HttpClientUtil.doPost("http://localhost:8080/tes", TokenUtil.getToken(), JSON.toJSONString(rechargeUpParam));
         return FesResponseUtil.fesResponse(s);
     }
 
     @Override
     public FesResponse meterInfo(MeterInfoParam metreInfoVo) {
-        String url = apiParam.getDccUrl() + apiParam.getMeterInfo();
-        String s = HttpClientUtil.doPost(url, restTemplateUtils.getToken(), JSON.toJSONString(metreInfoVo));
-        return null;
-    }
-
-    @Override
-    public FesResponse openAccount(OpenAccountParam openAccountParam) {
-        return null;
+        redisTemplate.opsForHash().put("MeterInfoParam", metreInfoVo.getMeterNo(), metreInfoVo);
+        System.out.println(metreInfoVo);
+        return new FesResponse().success().message("下发表具成功！");
     }
 
     @Override
     public FesResponse setParameter(ParameterUpParam parameterUpParam) {
-        return null;
+        String url = apiParam.getDccUrl() + apiParam.getSParameter();
+        String url2 = ParserUtil.parse("{", "}", url, parameterUpParam.getMeterNo());
+        String s = HttpClientUtil.doPost(url2, TokenUtil.getToken(), JSON.toJSONString(parameterUpParam));
+        System.out.println(s);
+        return FesResponseUtil.fesResponse(s);
     }
 
     @Override
     public FesResponse getParameter(ParameterParam parameterParam) {
-        return null;
+        String url = apiParam.getDccUrl() + apiParam.getGParameter();
+        String url2 = ParserUtil.parse("{", "}", url, parameterParam.getMeterNo());
+        String s = HttpClientUtil.doGet(url2, TokenUtil.getToken());
+        System.out.println(s);
+        return FesResponseUtil.fesResponse(s);
     }
 
     @Override
     public FesResponse dataSupplement(DataSupplementParam dataSupplementParam) {
         return null;
+    }
+
+    @Override
+    public FesResponse meterDataUp(JSONObject jsonObject) {
+        try {
+            MeterDataUpParam meterDataUpParam = new MeterDataUpParam();
+            List<MeterReadingDetails> list = new ArrayList<>();
+            Optional.ofNullable(jsonObject).flatMap(
+                    jsonObject1 -> {
+                        meterDataUpParam.setMeterNo(Optional.ofNullable(jsonObject1.getString("meterNo")).get());
+                        meterDataUpParam.setFactoryCode(Optional.ofNullable(jsonObject1.getString("modelCode")).get());
+                        meterDataUpParam.setMeterType(Optional.ofNullable(jsonObject1.getString("modelCode")).get());
+                        meterDataUpParam.setValveStatus(Optional.ofNullable(jsonObject1.getString("valveStatus")).get());
+                        meterDataUpParam.setSignalStrength(Optional.ofNullable(jsonObject1.getString("networkSignalQuality")).get());
+                        meterDataUpParam.setPowerType("1");
+                        meterDataUpParam.setCurrentCellVoltage(Optional.ofNullable(jsonObject1.getString("outBattery")).get());
+                        meterDataUpParam.setTotalRechargeAmt(Optional.ofNullable(jsonObject1.getString("totalPurchaseFeeAmount")).get());
+                        meterDataUpParam.setTotalRechargeCount("");
+                        meterDataUpParam.setTotalRechargeQty("");
+                        meterDataUpParam.setTemperature("");
+                        meterDataUpParam.setPressure("");
+                        meterDataUpParam.setMeterTime(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")));
+                        MeterReadingDetails meterReadingDetails = new MeterReadingDetails();
+                        meterReadingDetails.setDataTime(Optional.ofNullable(jsonObject1.getString("meterReadTime")).get());
+                        meterReadingDetails.setReadingNum(Optional.ofNullable(jsonObject1.getString("standardModeAmount")).get());
+                        meterReadingDetails.setStandardNum(Optional.ofNullable(jsonObject1.getString("standardModeAmount")).get());
+                        meterReadingDetails.setWorkNum(Optional.ofNullable(jsonObject1.getString("standardModeAmount")).get());
+                        meterReadingDetails.setTotalUseAmt(Optional.ofNullable(jsonObject1.getString("totalPurchaseFeeAmount")).get());
+                        meterReadingDetails.setMeterBalanceQty("");
+                        list.add(meterReadingDetails);
+                        meterDataUpParam.setMeterReadingDetails(list);
+                        System.out.println(jsonObject.toJSONString());
+                        //  System.out.println(meterDataUpParam);
+                        //  String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getReturnDataUp(), JSON.toJSONString(meterDataUpParam));
+                        //  System.out.println(ss);
+                        return null;
+                    }
+            );
+            return new FesResponse().success().data(meterDataUpParam);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    @Override
+    public FesResponse sendAlarm(JSONObject jsonObject) {
+        System.out.println(jsonObject.toJSONString());
+        SendAlarmParam sendAlarmParam = new SendAlarmParam();
+        List<AlarmInfo> list = new ArrayList<>();
+        Optional.ofNullable(jsonObject).ifPresent(
+                e -> {
+                    sendAlarmParam.setFactoryCode(Optional.ofNullable(jsonObject.getString("factoryCode")).get());
+                    sendAlarmParam.setMeterNo(Optional.ofNullable(jsonObject.getString("meterNo")).get());
+                    sendAlarmParam.setMeterType(Optional.ofNullable(jsonObject.getString("meterType")).get());
+                    AlarmInfo alarmInfo = new AlarmInfo();
+                    alarmInfo.setAlarmStatu(Optional.ofNullable(jsonObject.getString("alarmStatus")).get());
+                    alarmInfo.setAlarmTime(Optional.ofNullable(jsonObject.getString("alarmTime")).get());
+                    alarmInfo.setAlarmType(convertAlarmType(Optional.ofNullable(jsonObject.getString("alarmType")).get()));
+                    list.add(alarmInfo);
+                    sendAlarmParam.setAlarms(list);
+                }
+        );
+        // String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getSendAlarm(), JSON.toJSONString(jsonObject));
+        return new FesResponse().data(sendAlarmParam);
+    }
+    public String convertAlarmType(String type){
+        String ty="0000";
+        switch (type){
+            case "0":
+                ty="1010";
+                break;
+            case "1":
+            case "17":
+            case "25":
+            case "26":
+            case "27":
+            case "29":
+            case "12":
+            case "9":
+            case "5":
+            case "4":
+            case "3":
+            case "2":
+            case "15":
+            case "14":
+            case "24":
+            case "8":
+                ty="";
+                break;
+            case "6":
+                ty="1002";
+                break;
+            case "7":
+                ty="2001";
+                break;
+            case "10":
+                ty="1005";
+                break;
+            case "11":
+                ty="1003";
+                break;
+            case "13":
+                ty="1006";
+                break;
+            case "16":
+                ty="1001";
+                break;
+            case "18":
+            case "19":
+                ty="1009";
+                break;
+            case "20":
+            case "21":
+                ty="4001";
+                break;
+            case "22":
+                ty="1007";
+                break;
+            case "23":
+                ty="1004";
+                break;
+            case "28":
+                ty="2002";
+                break;
+            case "30":
+                ty="3002";
+                break;
+            case "31":
+                ty="3001";
+                break;
+            default:
+                break;
+        }
+        return ty;
     }
 }

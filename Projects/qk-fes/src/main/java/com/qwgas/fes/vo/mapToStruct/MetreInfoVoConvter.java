@@ -9,7 +9,7 @@ import org.mapstruct.Mappings;
 @Mapper(componentModel = "spring")
 public interface MetreInfoVoConvter {
     @Mappings({
-            @Mapping(source = "meterUserNo",target = "meterNo",defaultValue = ""),
+            @Mapping(source = "meterUserNo",target = "userNo",defaultValue = ""),
             @Mapping(source = "installAddress",target = "addrDes",defaultValue = ""),
             @Mapping(source = "installDate",target = "setUpTime",dateFormat = "yyyy-mm-dd HH24:MM:SS"),
             @Mapping(source = "standardModeAmount",target = "enableMeterReading")

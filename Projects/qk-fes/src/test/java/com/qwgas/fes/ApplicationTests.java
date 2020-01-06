@@ -1,8 +1,12 @@
 package com.qwgas.fes;
 
-import com.qwgas.fes.service.MeterDataUpService;
+import com.alibaba.fastjson.JSON;
 import com.qwgas.fes.test.RunService;
+import com.qwgas.fes.util.HttpClientUtil;
+import com.qwgas.fes.util.MD5Util;
 import com.qwgas.fes.vo.param.MeterDataUpParam;
+import com.qwgas.fes.vo.param.ResultParam;
+import org.apache.commons.codec.digest.Md5Crypt;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,9 +17,12 @@ import org.springframework.test.context.junit4.SpringRunner;
 import org.springframework.test.context.web.WebAppConfiguration;
 
 import java.net.URISyntaxException;
+import java.text.SimpleDateFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Arrays;
+import java.util.Base64;
+import java.util.Date;
 
 @RunWith(SpringRunner.class)
 @SpringBootTest(classes = Application.class)
@@ -26,16 +33,36 @@ public class ApplicationTests {
     RunService runService;
 
 
-    @Autowired
-    MeterDataUpService meterDataUpService;
 
     @Test
     public void getTest() throws URISyntaxException {
         //  runService.getTestGet();
         //runService.getTestPost();
         //runService.getTestPostParam();
-          runService.getTestPut();
+        //  runService.getTestPut();
         //  runService.getTestDel();
+
+      /*  SimpleDateFormat formatter = new SimpleDateFormat ("yyyyMMddHHmmss");
+        Date curDate = new Date(System.currentTimeMillis());//获取当前时间
+        String str = formatter.format(curDate);
+        System.out.println(str);
+        String appId ="WZQWApp";
+        String appSecrect ="MIGfMA0GCSqGSIb3D4HQ632qJBVHf8sxHi/fEsraprwCtzvzQETrNRwVxLO5jVmRGi60j8Ue1efIlzPXV9je9mkjzOmdssymZkh2QhUrCmZYI/FCEa3/cNMW0QIDAQAB";
+        String AccessToken =  MD5Util.MD5_32((appId+appSecrect+str));
+        String Authorization = Base64.getEncoder().encodeToString((appId+":"+str).getBytes());
+
+        System.out.println(AccessToken);
+        System.out.println(Authorization);*/
+
+        ResultParam resultParam = new ResultParam();
+        resultParam.setMeterNo("1119053060220464");
+        resultParam.setFactoryCode("1");
+        resultParam.setMeterType("1");
+        resultParam.setCommandSeq("111111");
+        resultParam.setResultCode("0000");
+      //  String message =   HttpClientUtil.returnPost("http://60.190.252.117:30348/rest/v1/collectionPlatform/openVResult", JSON.toJSONString(resultParam));
+        String message1 =   HttpClientUtil.returnPost("http://60.190.252.117:30348/rest/v1/collectionPlatform/closeVResult", JSON.toJSONString(resultParam));
+        System.out.println(message1);
     }
 
     @Test

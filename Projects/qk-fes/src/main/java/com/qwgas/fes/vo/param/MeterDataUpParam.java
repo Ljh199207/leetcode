@@ -79,6 +79,6 @@ public class MeterDataUpParam implements Serializable {
     /**
      * 抄表明细数据
      */
-    private List<MeterReadingDetails> readingDetails;
+    private List<MeterReadingDetails> meterReadingDetails;
 
 }
