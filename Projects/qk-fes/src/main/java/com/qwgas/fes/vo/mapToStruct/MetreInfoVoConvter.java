@@ -12,7 +12,7 @@ public interface MetreInfoVoConvter {
             @Mapping(source = "meterUserNo",target = "userNo",defaultValue = ""),
             @Mapping(source = "installAddress",target = "addrDes",defaultValue = ""),
             @Mapping(source = "installDate",target = "setUpTime",dateFormat = "yyyy-mm-dd HH24:MM:SS"),
-            @Mapping(source = "standardModeAmount",target = "enableMeterReading")
+            @Mapping(source = "initMeterNnumber",target = "enableMeterReading")
     })
     MetreInfoVo domain2dto(SearchMeter searchMeter);
 }

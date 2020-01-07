@@ -58,9 +58,11 @@ public class MeterDataServiceImpl implements MeterDataService {
     public MetreInfoVo searchMetreInfo(QueryMeterParam queryMeterParam) {
         String url = apiParam.getDccUrl() + apiParam.getSearchMetreInfo();
         String url2 = ParserUtil.parse("{", "}", url, queryMeterParam.getMeterNo());
-        ResponseEntity responseEntity = restTemplateUtils.get(url2);
-        JSONObject optional = Optional.ofNullable(responseEntity)
-                .flatMap(obj -> Optional.ofNullable(obj.getBody()))
+
+        String s =   HttpClientUtil.doGet(url2,TokenUtil.getToken());
+        JSONObject jsonObject = JSONObject.parseObject(s);
+     //   ResponseEntity responseEntity = restTemplateUtils.get(url2);
+        JSONObject optional = Optional.ofNullable(jsonObject)
                 .flatMap(jsonObj -> Optional.ofNullable(JSON.parseObject(jsonObj.toString()).getJSONObject("data")))
                 .get();
         SearchMeter searchMeter = JSONObject.parseObject(String.valueOf(optional), SearchMeter.class);
@@ -72,7 +74,6 @@ public class MeterDataServiceImpl implements MeterDataService {
         }
         return null;
     }
-
     /**
      * 开关阀
      *
@@ -324,9 +325,9 @@ public class MeterDataServiceImpl implements MeterDataService {
                         list.add(meterReadingDetails);
                         meterDataUpParam.setMeterReadingDetails(list);
                         System.out.println(jsonObject.toJSONString());
-                        //  System.out.println(meterDataUpParam);
-                        //  String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getReturnDataUp(), JSON.toJSONString(meterDataUpParam));
-                        //  System.out.println(ss);
+                          System.out.println(meterDataUpParam);
+                          String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getReturnDataUp(), JSON.toJSONString(meterDataUpParam));
+                          System.out.println(ss);
                         return null;
                     }
             );
@@ -343,18 +344,18 @@ public class MeterDataServiceImpl implements MeterDataService {
         List<AlarmInfo> list = new ArrayList<>();
         Optional.ofNullable(jsonObject).ifPresent(
                 e -> {
-                    sendAlarmParam.setFactoryCode(Optional.ofNullable(jsonObject.getString("factoryCode")).get());
-                    sendAlarmParam.setMeterNo(Optional.ofNullable(jsonObject.getString("meterNo")).get());
-                    sendAlarmParam.setMeterType(Optional.ofNullable(jsonObject.getString("meterType")).get());
+                    sendAlarmParam.setFactoryCode(Optional.ofNullable(jsonObject.getString("factoryCode")).orElse(""));
+                    sendAlarmParam.setMeterNo(Optional.ofNullable(jsonObject.getString("meterNo")).orElse(""));
+                    sendAlarmParam.setMeterType(Optional.ofNullable(jsonObject.getString("meterType")).orElse(""));
                     AlarmInfo alarmInfo = new AlarmInfo();
-                    alarmInfo.setAlarmStatu(Optional.ofNullable(jsonObject.getString("alarmStatus")).get());
-                    alarmInfo.setAlarmTime(Optional.ofNullable(jsonObject.getString("alarmTime")).get());
-                    alarmInfo.setAlarmType(convertAlarmType(Optional.ofNullable(jsonObject.getString("alarmType")).get()));
+                    alarmInfo.setAlarmStatu(Optional.ofNullable(jsonObject.getString("alarmStatus")).orElse(""));
+                    alarmInfo.setAlarmTime(Optional.ofNullable(jsonObject.getString("alarmTime")).orElse(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format(LocalDateTime.now())));
+                    alarmInfo.setAlarmType(convertAlarmType(Optional.ofNullable(jsonObject.getString("alarmType")).orElse("")));
                     list.add(alarmInfo);
                     sendAlarmParam.setAlarms(list);
                 }
         );
-        // String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getSendAlarm(), JSON.toJSONString(jsonObject));
+         String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getSendAlarm(), JSON.toJSONString(jsonObject));
         return new FesResponse().data(sendAlarmParam);
     }
     public String convertAlarmType(String type){

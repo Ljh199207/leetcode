@@ -8,7 +8,7 @@ import java.io.Serializable;
 public class SearchMeter implements Serializable {
 
 
-    private String standardModeAmount;
+    private String initMeterNnumber;
     private String meterUserNo;
     private String meterAddrNo;
     private String installAddress;

@@ -33,7 +33,7 @@ public class ChangepriceParam  implements Serializable {
      * 价格名称
      */
     @NotNull
-    private String priceNam;
+    private String priceName;
 
     /**
      * 价格版本
