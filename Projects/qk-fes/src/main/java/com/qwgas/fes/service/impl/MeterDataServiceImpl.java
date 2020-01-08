@@ -59,9 +59,9 @@ public class MeterDataServiceImpl implements MeterDataService {
         String url = apiParam.getDccUrl() + apiParam.getSearchMetreInfo();
         String url2 = ParserUtil.parse("{", "}", url, queryMeterParam.getMeterNo());
 
-        String s =   HttpClientUtil.doGet(url2,TokenUtil.getToken());
+        String s = HttpClientUtil.doGet(url2, TokenUtil.getToken());
         JSONObject jsonObject = JSONObject.parseObject(s);
-     //   ResponseEntity responseEntity = restTemplateUtils.get(url2);
+        //   ResponseEntity responseEntity = restTemplateUtils.get(url2);
         JSONObject optional = Optional.ofNullable(jsonObject)
                 .flatMap(jsonObj -> Optional.ofNullable(JSON.parseObject(jsonObj.toString()).getJSONObject("data")))
                 .get();
@@ -74,6 +74,7 @@ public class MeterDataServiceImpl implements MeterDataService {
         }
         return null;
     }
+
     /**
      * 开关阀
      *
@@ -157,7 +158,7 @@ public class MeterDataServiceImpl implements MeterDataService {
             String commandId = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getJSONObject("data")))
                     .flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("commandId"))).orElse("");
             rechargeUpParam.setCommandSeq(commandId);
-            rechargeUpParam.setFactoryCode(rechargeParam.getFactoryCode());
+            rechargeUpParam.setFactoryCode("");
             rechargeUpParam.setMeterNo(rechargeParam.getMeterNo());
             rechargeUpParam.setMeterType(rechargeParam.getMeterNo());
             rechargeUpParam.setTradeNo(rechargeParam.getTradeNo());
@@ -165,7 +166,8 @@ public class MeterDataServiceImpl implements MeterDataService {
             rechargeUpParam.setMeterBalanceAmt(rechargeParam.getMeterBalanceAmt());
             rechargeUpParam.setResultCode("0000");
             try {
-                String ss = HttpClientUtil.doPost(apiParam.getReturnUrl() + apiParam.getReturnRecharge(), TokenUtil.getToken(), JSON.toJSONString(rechargeUpParam, SerializerFeature.WriteMapNullValue));
+                //String ss = HttpClientUtil.doPost(apiParam.getReturnUrl() + apiParam.getReturnRecharge(), TokenUtil.getToken(), JSON.toJSONString(rechargeUpParam, SerializerFeature.WriteMapNullValue));
+                String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getReturnRecharge(), JSON.toJSONString(rechargeUpParam));
                 System.out.println(ss);
             } catch (Exception e) {
             } finally {
@@ -244,6 +246,7 @@ public class MeterDataServiceImpl implements MeterDataService {
 
     @Override
     public FesResponse cancelRecharge(CancelRechargeParam rechargeParam) {
+        System.out.println(rechargeParam);
         String url = apiParam.getDccUrl() + apiParam.getRecharge();
         String url2 = ParserUtil.parse("{", "}", url, rechargeParam.getMeterNo());
         RechargeApiVO rechargeApiVO = new RechargeApiVO();
@@ -258,10 +261,20 @@ public class MeterDataServiceImpl implements MeterDataService {
         String commandId = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getJSONObject("data")))
                 .flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("commandId"))).orElse("");
         rechargeUpParam.setCommandSeq(commandId);
-        rechargeUpParam.setFactoryCode(rechargeParam.getFactoryCode());
+        rechargeUpParam.setFactoryCode("");
         rechargeUpParam.setMeterNo(rechargeParam.getMeterNo());
         rechargeUpParam.setMeterType(rechargeParam.getMeterNo());
-        //String ss = HttpClientUtil.doPost("http://localhost:8080/tes", TokenUtil.getToken(), JSON.toJSONString(rechargeUpParam));
+        rechargeUpParam.setRechargeNum(rechargeParam.getRechargeNum());
+        rechargeUpParam.setTradeNo(rechargeParam.getTradeNo());
+        String code = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("code"))).orElse("");
+        if(StringUtils.isNotBlank(code)&&("0").equals(code)){
+            rechargeUpParam.setResultCode("00");
+        }
+        else {
+            rechargeUpParam.setResultCode("01");
+        }
+        System.out.println(rechargeUpParam);
+        String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl()+apiParam.getReturnCancel(), JSON.toJSONString(rechargeUpParam));
         return FesResponseUtil.fesResponse(s);
     }
 
@@ -304,12 +317,15 @@ public class MeterDataServiceImpl implements MeterDataService {
                     jsonObject1 -> {
                         meterDataUpParam.setMeterNo(Optional.ofNullable(jsonObject1.getString("meterNo")).get());
                         meterDataUpParam.setFactoryCode(Optional.ofNullable(jsonObject1.getString("modelCode")).get());
-                        meterDataUpParam.setMeterType(Optional.ofNullable(jsonObject1.getString("modelCode")).get());
-                        meterDataUpParam.setValveStatus(Optional.ofNullable(jsonObject1.getString("valveStatus")).get());
+                       // meterDataUpParam.setMeterType(Optional.ofNullable(jsonObject1.getString("modelCode")).get());
+                        Object meterType =redisTemplate.opsForHash().get("MeterInfoParam",Optional.ofNullable(jsonObject1.getString("meterNo")).get());
+                        JSONObject json = (JSONObject) JSON.toJSON(meterType);
+                        meterDataUpParam.setMeterType(Optional.ofNullable(json).map(jsonObject2 -> jsonObject2.getString("meterType")).orElse(""));
+                        meterDataUpParam.setValveStatus(convertValveStatus(Optional.ofNullable(jsonObject1.getString("valveStatus")).orElse("")));
                         meterDataUpParam.setSignalStrength(Optional.ofNullable(jsonObject1.getString("networkSignalQuality")).get());
                         meterDataUpParam.setPowerType("1");
                         meterDataUpParam.setCurrentCellVoltage(Optional.ofNullable(jsonObject1.getString("outBattery")).get());
-                        meterDataUpParam.setTotalRechargeAmt(Optional.ofNullable(jsonObject1.getString("totalPurchaseFeeAmount")).get());
+                        meterDataUpParam.setTotalRechargeAmt(Optional.ofNullable(jsonObject1.getString("totalPurchaseFeeAmount")).orElse("0.0"));
                         meterDataUpParam.setTotalRechargeCount("");
                         meterDataUpParam.setTotalRechargeQty("");
                         meterDataUpParam.setTemperature("");
@@ -321,13 +337,14 @@ public class MeterDataServiceImpl implements MeterDataService {
                         meterReadingDetails.setStandardNum(Optional.ofNullable(jsonObject1.getString("standardModeAmount")).get());
                         meterReadingDetails.setWorkNum(Optional.ofNullable(jsonObject1.getString("standardModeAmount")).get());
                         meterReadingDetails.setTotalUseAmt(Optional.ofNullable(jsonObject1.getString("totalPurchaseFeeAmount")).get());
-                        meterReadingDetails.setMeterBalanceQty("");
+                        meterReadingDetails.setMeterBalanceAmt(Optional.ofNullable(jsonObject1.getString("lastBalance")).orElse("0"));
+                        meterReadingDetails.setMeterBalanceQty(Optional.ofNullable(jsonObject1.getString("gasBalance")).orElse("0"));
                         list.add(meterReadingDetails);
                         meterDataUpParam.setMeterReadingDetails(list);
                         System.out.println(jsonObject.toJSONString());
-                          System.out.println(meterDataUpParam);
-                          String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getReturnDataUp(), JSON.toJSONString(meterDataUpParam));
-                          System.out.println(ss);
+                        System.out.println(meterDataUpParam);
+                        String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getReturnDataUp(), JSON.toJSONString(meterDataUpParam));
+                        System.out.println(ss);
                         return null;
                     }
             );
@@ -335,6 +352,30 @@ public class MeterDataServiceImpl implements MeterDataService {
         } catch (Exception e) {
             return null;
         }
+    }
+
+    private String convertValveStatus(String valveStatus) {
+        String vs = "0";
+        switch (valveStatus) {
+            case "0":
+                vs = "3";
+                break;
+            case "1":
+                vs = "0";
+                break;
+            case "2":
+            case "3":
+                vs = "4";
+                break;
+            case "4":
+                vs = "1";
+                break;
+            case "5":
+            case "6":
+                vs = "2";
+                break;
+        }
+        return vs;
     }
 
     @Override
@@ -346,23 +387,27 @@ public class MeterDataServiceImpl implements MeterDataService {
                 e -> {
                     sendAlarmParam.setFactoryCode(Optional.ofNullable(jsonObject.getString("factoryCode")).orElse(""));
                     sendAlarmParam.setMeterNo(Optional.ofNullable(jsonObject.getString("meterNo")).orElse(""));
-                    sendAlarmParam.setMeterType(Optional.ofNullable(jsonObject.getString("meterType")).orElse(""));
+                    Object meterType =redisTemplate.opsForHash().get("MeterInfoParam",Optional.ofNullable(jsonObject.getString("meterNo")).orElse(""));
+                    JSONObject json = (JSONObject) JSON.toJSON(meterType);
+                    sendAlarmParam.setMeterType( Optional.ofNullable(json).map(jsonObject1 -> jsonObject1.getString("meterType")).orElse(""));
                     AlarmInfo alarmInfo = new AlarmInfo();
-                    alarmInfo.setAlarmStatu(Optional.ofNullable(jsonObject.getString("alarmStatus")).orElse(""));
+                    alarmInfo.setAlarmStatus(Optional.ofNullable(jsonObject.getString("alarmStatus")).orElse(""));
                     alarmInfo.setAlarmTime(Optional.ofNullable(jsonObject.getString("alarmTime")).orElse(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format(LocalDateTime.now())));
                     alarmInfo.setAlarmType(convertAlarmType(Optional.ofNullable(jsonObject.getString("alarmType")).orElse("")));
                     list.add(alarmInfo);
                     sendAlarmParam.setAlarms(list);
                 }
         );
-         String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getSendAlarm(), JSON.toJSONString(jsonObject));
+        String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getSendAlarm(), JSON.toJSONString(sendAlarmParam));
+        System.out.println( ss);
         return new FesResponse().data(sendAlarmParam);
     }
-    public String convertAlarmType(String type){
-        String ty="0000";
-        switch (type){
+
+    public String convertAlarmType(String type) {
+        String ty = "0000";
+        switch (type) {
             case "0":
-                ty="1010";
+                ty = "1010";
                 break;
             case "1":
             case "17":
@@ -380,48 +425,48 @@ public class MeterDataServiceImpl implements MeterDataService {
             case "14":
             case "24":
             case "8":
-                ty="";
+                ty = "0000";
                 break;
             case "6":
-                ty="1002";
+                ty = "1002";
                 break;
             case "7":
-                ty="2001";
+                ty = "2001";
                 break;
             case "10":
-                ty="1005";
+                ty = "1005";
                 break;
             case "11":
-                ty="1003";
+                ty = "1003";
                 break;
             case "13":
-                ty="1006";
+                ty = "1006";
                 break;
             case "16":
-                ty="1001";
+                ty = "1001";
                 break;
             case "18":
             case "19":
-                ty="1009";
+                ty = "1009";
                 break;
             case "20":
             case "21":
-                ty="4001";
+                ty = "4001";
                 break;
             case "22":
-                ty="1007";
+                ty = "1007";
                 break;
             case "23":
-                ty="1004";
+                ty = "1004";
                 break;
             case "28":
-                ty="2002";
+                ty = "2002";
                 break;
             case "30":
-                ty="3002";
+                ty = "3002";
                 break;
             case "31":
-                ty="3001";
+                ty = "3001";
                 break;
             default:
                 break;

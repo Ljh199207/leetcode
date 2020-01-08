@@ -28,5 +28,5 @@ public class AlarmInfo implements Serializable {
      * 状态:0:报警中 ，1：报警取消
      */
     @NotNull
-    private String alarmStatu;
+    private String alarmStatus;
 }
