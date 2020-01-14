@@ -5,11 +5,14 @@ import com.alibaba.fastjson.JSONObject;
 import com.qwgas.fes.config.ApiParam;
 import com.qwgas.fes.response.FesResponse;
 import com.qwgas.fes.service.CommonService;
+import com.qwgas.fes.util.HttpClientUtil;
+import com.qwgas.fes.util.TokenUtil;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestTemplate;
@@ -55,7 +58,7 @@ public class CommonServiceImpl implements CommonService {
                     .flatMap(obj -> Optional.ofNullable(obj.getBody()))
                     .flatMap(jsonObj -> {
                         fesResponse.message(Optional.ofNullable(JSON.parseObject(jsonObj.toString()).getString("message")).orElse(""));
-                        fesResponse.put("returnCode",Optional.ofNullable(JSON.parseObject(jsonObj.toString()).getString("code")).get());
+                        fesResponse.put("returnCode", Optional.ofNullable(JSON.parseObject(jsonObj.toString()).getString("code")).get());
                         return Optional.ofNullable(JSON.parseObject(jsonObj.toString()).getJSONObject("data"));
                     })
                     .flatMap(jsonObj -> {
@@ -67,4 +70,6 @@ public class CommonServiceImpl implements CommonService {
             return null;
         }
     }
+
+
 }

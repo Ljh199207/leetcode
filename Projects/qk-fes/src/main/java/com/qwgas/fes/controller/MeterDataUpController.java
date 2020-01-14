@@ -40,3 +40,6 @@ public class MeterDataUpController {
         return commonService.getToken(jsonObject);
     }
 }
+
+
+

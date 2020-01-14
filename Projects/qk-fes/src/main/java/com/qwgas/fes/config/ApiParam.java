@@ -116,4 +116,9 @@ public class ApiParam {
      * 数据上报
      */
     private String returnDataUp;
+
+    /**
+     * 数据上报
+     */
+    private String returnChangePrice;
 }

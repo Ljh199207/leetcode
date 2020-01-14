@@ -7,7 +7,7 @@ appSecrect: MIGfMA0GCSqGSIb3D4HQ632qJBVHf8sxHi/fEsraprwCtzvzQETrNRwVxLO5jVmRGi60
 api:
   serviceId: NxmCue5mB8O2sYoKCWcRjKgiWy1UdRzH
   serviceSecret: SYZeADrIRxEiOITxhC7qMJq1rXqfFxB2
-  dccUrl: http://dev.dcc.qwgas.com:8083
+  dccUrl: http://dev.dcc.qwgas.com
   tokenUrl: /api/umc/token
   searchMetreInfo: /api/dcc/meter/{meterNo}/info
   valveOpera: /api/dcc/meter/{meterNo}/valve
@@ -22,3 +22,4 @@ api:
   returnCancel: /rest/v1/collectionPlatform/cancelRechargeUp
   returnDataUp: /rest/v1/collectionPlatform/meterDataUp
   sendAlarm: /rest/v1/collectionPlatform/sendAlarm
+  returnChangePrice: /rest/v1/collectionPlatform/chargePriceResult

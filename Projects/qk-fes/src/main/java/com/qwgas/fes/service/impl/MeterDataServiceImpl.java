@@ -2,9 +2,9 @@ package com.qwgas.fes.service.impl;
 
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.JSONObject;
-import com.alibaba.fastjson.serializer.SerializerFeature;
 import com.qwgas.fes.config.ApiParam;
 import com.qwgas.fes.response.FesResponse;
+import com.qwgas.fes.service.CommonService;
 import com.qwgas.fes.service.MeterDataService;
 import com.qwgas.fes.util.*;
 import com.qwgas.fes.vo.MetreInfoVo;
@@ -16,8 +16,8 @@ import com.qwgas.fes.vo.mapToStruct.MetreInfoVoConvter;
 import com.qwgas.fes.vo.param.*;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.core.task.TaskExecutor;
 import org.springframework.data.redis.core.RedisTemplate;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
@@ -45,13 +45,15 @@ public class MeterDataServiceImpl implements MeterDataService {
 
     private final MetreInfoVoConvter metreInfoVoConvter;
 
+    private final TaskExecutor taskExecutor;
 
     @Autowired
-    public MeterDataServiceImpl(ApiParam apiParam, RestTemplate restTemplate, RestTemplateUtils restTemplateUtils, MetreInfoVoConvter metreInfoVoConvter) {
+    public MeterDataServiceImpl(ApiParam apiParam, RestTemplate restTemplate, RestTemplateUtils restTemplateUtils, MetreInfoVoConvter metreInfoVoConvter, CommonService commonService, TaskExecutor taskExecutor) {
         this.apiParam = apiParam;
         this.restTemplate = restTemplate;
         this.restTemplateUtils = restTemplateUtils;
         this.metreInfoVoConvter = metreInfoVoConvter;
+        this.taskExecutor = taskExecutor;
     }
 
     @Override
@@ -149,37 +151,42 @@ public class MeterDataServiceImpl implements MeterDataService {
             rechargeApiVO.setRechargeType(1);
         }
         rechargeApiVO.setAmount(Double.valueOf(rechargeParam.getRechargeNum()));
-        String s = HttpClientUtil.doPost(url2, TokenUtil.getToken(), JSON.toJSONString(rechargeApiVO));
-        System.out.println(s);
-        try {
-            JSONObject jsonObject = JSONObject.parseObject(s);
-            //todo 返回数据
-            RechargeUpParam rechargeUpParam = new RechargeUpParam();
-            String commandId = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getJSONObject("data")))
-                    .flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("commandId"))).orElse("");
-            rechargeUpParam.setCommandSeq(commandId);
-            rechargeUpParam.setFactoryCode("");
-            rechargeUpParam.setMeterNo(rechargeParam.getMeterNo());
-            rechargeUpParam.setMeterType(rechargeParam.getMeterNo());
-            rechargeUpParam.setTradeNo(rechargeParam.getTradeNo());
-            rechargeUpParam.setRechargeNum(rechargeParam.getRechargeNum());
-            rechargeUpParam.setMeterBalanceAmt(rechargeParam.getMeterBalanceAmt());
-            rechargeUpParam.setResultCode("0000");
+        taskExecutor.execute(() -> {
+            String s = HttpClientUtil.doPost(url2, TokenUtil.getToken(), JSON.toJSONString(rechargeApiVO));
+            System.out.println(s);
             try {
-                //String ss = HttpClientUtil.doPost(apiParam.getReturnUrl() + apiParam.getReturnRecharge(), TokenUtil.getToken(), JSON.toJSONString(rechargeUpParam, SerializerFeature.WriteMapNullValue));
+                JSONObject jsonObject = JSONObject.parseObject(s);
+                //todo 返回数据
+                RechargeUpParam rechargeUpParam = new RechargeUpParam();
+                String commandId = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getJSONObject("data")))
+                        .flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("commandId"))).orElse("");
+                String code = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("code"))).orElse("");
+                rechargeUpParam.setCommandSeq(commandId);
+                Object meterType = redisTemplate.opsForHash().get("MeterInfoParam", rechargeParam.getMeterNo());
+                JSONObject json = (JSONObject) JSON.toJSON(meterType);
+                rechargeUpParam.setFactoryCode(Optional.ofNullable(json).map(jsonObject2 -> jsonObject2.getString("companyNo")).orElse(""));
+                rechargeUpParam.setMeterNo(rechargeParam.getMeterNo());
+                rechargeUpParam.setMeterType(rechargeParam.getMeterType());
+                rechargeUpParam.setTradeNo(rechargeParam.getTradeNo());
+                rechargeUpParam.setRechargeNum(rechargeParam.getRechargeNum());
+                rechargeUpParam.setMeterBalanceAmt(rechargeParam.getMeterBalanceAmt());
+                if (StringUtils.isNotBlank(code) && ("0").equals(code)) {
+                    rechargeUpParam.setResultCode("00");
+                } else {
+                    rechargeUpParam.setResultCode("01");
+                }
                 String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getReturnRecharge(), JSON.toJSONString(rechargeUpParam));
                 System.out.println(ss);
             } catch (Exception e) {
-            } finally {
-                return new FesResponse().success().data(rechargeParam);
+                e.printStackTrace();
             }
-        } catch (Exception e) {
-            return new FesResponse().fail().message(e.getMessage());
-        }
+        });
+        return new FesResponse().success().message("充值下发成功");
     }
 
     @Override
     public FesResponse changePrice(ChangepriceParam changepriceParam) throws ParseException {
+        System.out.println(changepriceParam);
         String url = apiParam.getDccUrl() + apiParam.getChangePrice();
         String url2 = ParserUtil.parse("{", "}", url, changepriceParam.getMeterNo());
         GasPriceApiVO gasPriceApiVO = new GasPriceApiVO();
@@ -188,21 +195,21 @@ public class MeterDataServiceImpl implements MeterDataService {
         } else {
             gasPriceApiVO.setPriceTierCount(Integer.valueOf(changepriceParam.getPriceLadderNum()));
         }
-        gasPriceApiVO.setTieredChargingCycle(Integer.valueOf(changepriceParam.getBillingCycl()));
+        gasPriceApiVO.setTieredChargingCycle(Integer.valueOf(StringUtils.isNotBlank(changepriceParam.getBillingCycl()) ? changepriceParam.getBillingCycl() : "1"));
         if (StringUtils.isNotBlank(changepriceParam.getCycleStartDat())) {
+            gasPriceApiVO.setChargingBeginTime(changepriceParam.getCycleStartDat());
+        } else if (StringUtils.isNotBlank(changepriceParam.getEffectiveDate())) {
             SimpleDateFormat sdf1 = new SimpleDateFormat("yyyy-MM-dd");
-            Date date = sdf1.parse(changepriceParam.getCycleStartDat());
+            Date date = sdf1.parse(changepriceParam.getEffectiveDate());
             SimpleDateFormat sdf2 = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
             String str = sdf2.format(date);
             gasPriceApiVO.setChargingBeginTime(str);
-        } else if (StringUtils.isNotBlank(changepriceParam.getEffectiveDate())) {
-            gasPriceApiVO.setChargingBeginTime(changepriceParam.getEffectiveDate());
         }
-        gasPriceApiVO.setTierPrice1(Double.valueOf(changepriceParam.getPrice0()));
-        gasPriceApiVO.setTierPrice2(Double.valueOf(changepriceParam.getPrice1()));
-        gasPriceApiVO.setTierPrice3(Double.valueOf(changepriceParam.getPrice2()));
-        gasPriceApiVO.setTierPrice4(Double.valueOf(changepriceParam.getPrice3()));
-        gasPriceApiVO.setTierPrice5(Double.valueOf(changepriceParam.getPrice4()));
+        gasPriceApiVO.setTierPrice1(Double.valueOf(StringUtils.isNotBlank(changepriceParam.getPrice0()) ? changepriceParam.getPrice0() : "0.00"));
+        gasPriceApiVO.setTierPrice2(Double.valueOf(StringUtils.isNotBlank(changepriceParam.getPrice1()) ? changepriceParam.getPrice1() : "0.00"));
+        gasPriceApiVO.setTierPrice3(Double.valueOf(Double.valueOf(StringUtils.isNotBlank(changepriceParam.getPrice2()) ? changepriceParam.getPrice2() : "0.00")));
+        gasPriceApiVO.setTierPrice4(Double.valueOf(Double.valueOf(StringUtils.isNotBlank(changepriceParam.getPrice3()) ? changepriceParam.getPrice3() : "0.00")));
+        gasPriceApiVO.setTierPrice5(Double.valueOf(Double.valueOf(StringUtils.isNotBlank(changepriceParam.getPrice4()) ? changepriceParam.getPrice4() : "0.00")));
         if (StringUtils.isNotBlank(changepriceParam.getLevel1())) {
             gasPriceApiVO.setTierGas1(changepriceParam.getLevel1());
         }
@@ -215,17 +222,26 @@ public class MeterDataServiceImpl implements MeterDataService {
         if (StringUtils.isNotBlank(changepriceParam.getLevel4())) {
             gasPriceApiVO.setTierGas4(changepriceParam.getLevel4());
         }
-        String s = HttpClientUtil.doPut(url2, TokenUtil.getToken(), JSON.toJSONString(gasPriceApiVO));
-
-        // todo  返回数据
-        ResultParam resultParam = new ResultParam();
-        resultParam.setMeterType(changepriceParam.getMeterType());
-        resultParam.setMeterNo(changepriceParam.getMeterNo());
-        resultParam.setFactoryCode("");
-        //String ss = HttpClientUtil.returnPost("http://60.190.252.117:30348/rest/v1/collectionPlatform/rechargeUp", JSON.toJSONString(gasPriceApiVO));
-
-        System.out.println(s);
-        return FesResponseUtil.fesResponse(s);
+        taskExecutor.execute(() -> {
+            String s = HttpClientUtil.doPut(url2, TokenUtil.getToken(), JSON.toJSONString(gasPriceApiVO));
+            // todo  返回数据
+            ResultParam resultParam = new ResultParam();
+            resultParam.setMeterType(changepriceParam.getMeterType());
+            resultParam.setMeterNo(changepriceParam.getMeterNo());
+            Object meterType = redisTemplate.opsForHash().get("MeterInfoParam", changepriceParam.getMeterNo());
+            JSONObject json = (JSONObject) JSON.toJSON(meterType);
+            resultParam.setFactoryCode(Optional.ofNullable(json).map(jsonObject2 -> jsonObject2.getString("companyNo")).orElse(""));
+            JSONObject jsonObject = JSONObject.parseObject(s);
+            String code = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("code"))).orElse("");
+            if (StringUtils.isNotBlank(code) && ("0").equals(code)) {
+                resultParam.setResultCode("00");
+            } else {
+                resultParam.setResultCode("01");
+            }
+            String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getReturnChangePrice(), JSON.toJSONString(resultParam));
+            System.out.println(s);
+        });
+        return new FesResponse().success().message("调价下发成功！");
     }
 
     @Override
@@ -244,38 +260,45 @@ public class MeterDataServiceImpl implements MeterDataService {
         return FesResponseUtil.fesResponse(s);
     }
 
+
     @Override
     public FesResponse cancelRecharge(CancelRechargeParam rechargeParam) {
         System.out.println(rechargeParam);
+
+
         String url = apiParam.getDccUrl() + apiParam.getRecharge();
         String url2 = ParserUtil.parse("{", "}", url, rechargeParam.getMeterNo());
         RechargeApiVO rechargeApiVO = new RechargeApiVO();
         //冲正，取消充值
         rechargeApiVO.setMode(2);
-        rechargeApiVO.setAmount(Double.valueOf(rechargeParam.getRechargeNum()));
-        String s = HttpClientUtil.doPost(url2, TokenUtil.getToken(), JSON.toJSONString(rechargeApiVO));
-        //todo 返回数据
-        RechargeUpParam rechargeUpParam = new RechargeUpParam();
-        JSONObject jsonObject = JSONObject.parseObject(s);
-        //todo 返回数据
-        String commandId = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getJSONObject("data")))
-                .flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("commandId"))).orElse("");
-        rechargeUpParam.setCommandSeq(commandId);
-        rechargeUpParam.setFactoryCode("");
-        rechargeUpParam.setMeterNo(rechargeParam.getMeterNo());
-        rechargeUpParam.setMeterType(rechargeParam.getMeterNo());
-        rechargeUpParam.setRechargeNum(rechargeParam.getRechargeNum());
-        rechargeUpParam.setTradeNo(rechargeParam.getTradeNo());
-        String code = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("code"))).orElse("");
-        if(StringUtils.isNotBlank(code)&&("0").equals(code)){
-            rechargeUpParam.setResultCode("00");
-        }
-        else {
-            rechargeUpParam.setResultCode("01");
-        }
-        System.out.println(rechargeUpParam);
-        String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl()+apiParam.getReturnCancel(), JSON.toJSONString(rechargeUpParam));
-        return FesResponseUtil.fesResponse(s);
+        rechargeApiVO.setAmount(Math.abs(Double.valueOf(rechargeParam.getRechargeNum())));
+        taskExecutor.execute(() -> {
+            String s = HttpClientUtil.doPost(url2, TokenUtil.getToken(), JSON.toJSONString(rechargeApiVO));
+            //todo 返回数据
+            RechargeUpParam rechargeUpParam = new RechargeUpParam();
+            JSONObject jsonObject = JSONObject.parseObject(s);
+            //todo 返回数据
+            String commandId = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getJSONObject("data")))
+                    .flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("commandId"))).orElse("");
+            rechargeUpParam.setCommandSeq(commandId);
+            Object meterType = redisTemplate.opsForHash().get("MeterInfoParam", rechargeParam.getMeterNo());
+            JSONObject json = (JSONObject) JSON.toJSON(meterType);
+            rechargeUpParam.setFactoryCode(Optional.ofNullable(json).map(jsonObject2 -> jsonObject2.getString("companyNo")).orElse(""));
+            rechargeUpParam.setMeterNo(rechargeParam.getMeterNo());
+            rechargeUpParam.setMeterType(rechargeParam.getMeterType());
+            rechargeUpParam.setRechargeNum(rechargeParam.getRechargeNum());
+            rechargeUpParam.setTradeNo(rechargeParam.getTradeNo());
+            String code = Optional.ofNullable(jsonObject).flatMap(jsonObject1 -> Optional.ofNullable(jsonObject1.getString("code"))).orElse("");
+            if (StringUtils.isNotBlank(code) && ("0").equals(code)) {
+                rechargeUpParam.setResultCode("00");
+            } else {
+                rechargeUpParam.setResultCode("01");
+            }
+            System.out.println(rechargeUpParam);
+            String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getReturnCancel(), JSON.toJSONString(rechargeUpParam));
+            System.out.println(ss);
+        });
+        return new FesResponse().success().message("取消充值成功下发");
     }
 
     @Override
@@ -287,10 +310,13 @@ public class MeterDataServiceImpl implements MeterDataService {
 
     @Override
     public FesResponse setParameter(ParameterUpParam parameterUpParam) {
+        System.out.println(parameterUpParam);
         String url = apiParam.getDccUrl() + apiParam.getSParameter();
         String url2 = ParserUtil.parse("{", "}", url, parameterUpParam.getMeterNo());
         String s = HttpClientUtil.doPost(url2, TokenUtil.getToken(), JSON.toJSONString(parameterUpParam));
         System.out.println(s);
+
+
         return FesResponseUtil.fesResponse(s);
     }
 
@@ -298,15 +324,28 @@ public class MeterDataServiceImpl implements MeterDataService {
     public FesResponse getParameter(ParameterParam parameterParam) {
         String url = apiParam.getDccUrl() + apiParam.getGParameter();
         String url2 = ParserUtil.parse("{", "}", url, parameterParam.getMeterNo());
-        String s = HttpClientUtil.doGet(url2, TokenUtil.getToken());
-        System.out.println(s);
-        return FesResponseUtil.fesResponse(s);
+        taskExecutor.execute(() -> {
+            String s = HttpClientUtil.doGet(url2, TokenUtil.getToken());
+            System.out.println(s);
+            JSONObject jsonObject = JSONObject.parseObject(s);
+            JSONObject object = Optional.ofNullable(jsonObject)
+                    .flatMap(jsonObject1 -> Optional.ofNullable(jsonObject.getJSONObject("data"))).orElse(null);
+            ParameterUpParam parameterUpParam = JSONObject.parseObject(JSON.toJSONString(object), ParameterUpParam.class);
+            Object meterType = redisTemplate.opsForHash().get("MeterInfoParam", parameterParam.getMeterNo());
+            JSONObject json = (JSONObject) JSON.toJSON(meterType);
+            parameterUpParam.setMeterType(Optional.ofNullable(json).map(jsonObject1 -> jsonObject1.getString("meterType")).orElse(""));
+            String s1 = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getReturnParam(), JSON.toJSONString(parameterUpParam));
+            System.out.println(s1);
+        });
+
+        return new FesResponse().success().message("参数读取下发成功");
     }
 
     @Override
     public FesResponse dataSupplement(DataSupplementParam dataSupplementParam) {
         return null;
     }
+
 
     @Override
     public FesResponse meterDataUp(JSONObject jsonObject) {
@@ -317,8 +356,8 @@ public class MeterDataServiceImpl implements MeterDataService {
                     jsonObject1 -> {
                         meterDataUpParam.setMeterNo(Optional.ofNullable(jsonObject1.getString("meterNo")).get());
                         meterDataUpParam.setFactoryCode(Optional.ofNullable(jsonObject1.getString("modelCode")).get());
-                       // meterDataUpParam.setMeterType(Optional.ofNullable(jsonObject1.getString("modelCode")).get());
-                        Object meterType =redisTemplate.opsForHash().get("MeterInfoParam",Optional.ofNullable(jsonObject1.getString("meterNo")).get());
+                        // meterDataUpParam.setMeterType(Optional.ofNullable(jsonObject1.getString("modelCode")).get());
+                        Object meterType = redisTemplate.opsForHash().get("MeterInfoParam", Optional.ofNullable(jsonObject1.getString("meterNo")).get());
                         JSONObject json = (JSONObject) JSON.toJSON(meterType);
                         meterDataUpParam.setMeterType(Optional.ofNullable(json).map(jsonObject2 -> jsonObject2.getString("meterType")).orElse(""));
                         meterDataUpParam.setValveStatus(convertValveStatus(Optional.ofNullable(jsonObject1.getString("valveStatus")).orElse("")));
@@ -337,7 +376,7 @@ public class MeterDataServiceImpl implements MeterDataService {
                         meterReadingDetails.setStandardNum(Optional.ofNullable(jsonObject1.getString("standardModeAmount")).get());
                         meterReadingDetails.setWorkNum(Optional.ofNullable(jsonObject1.getString("standardModeAmount")).get());
                         meterReadingDetails.setTotalUseAmt(Optional.ofNullable(jsonObject1.getString("totalPurchaseFeeAmount")).get());
-                        meterReadingDetails.setMeterBalanceAmt(Optional.ofNullable(jsonObject1.getString("lastBalance")).orElse("0"));
+                        meterReadingDetails.setMeterBalanceAmt(Optional.ofNullable(jsonObject1.getString("accountAmount")).orElse("0"));
                         meterReadingDetails.setMeterBalanceQty(Optional.ofNullable(jsonObject1.getString("gasBalance")).orElse("0"));
                         list.add(meterReadingDetails);
                         meterDataUpParam.setMeterReadingDetails(list);
@@ -387,9 +426,9 @@ public class MeterDataServiceImpl implements MeterDataService {
                 e -> {
                     sendAlarmParam.setFactoryCode(Optional.ofNullable(jsonObject.getString("factoryCode")).orElse(""));
                     sendAlarmParam.setMeterNo(Optional.ofNullable(jsonObject.getString("meterNo")).orElse(""));
-                    Object meterType =redisTemplate.opsForHash().get("MeterInfoParam",Optional.ofNullable(jsonObject.getString("meterNo")).orElse(""));
+                    Object meterType = redisTemplate.opsForHash().get("MeterInfoParam", Optional.ofNullable(jsonObject.getString("meterNo")).orElse(""));
                     JSONObject json = (JSONObject) JSON.toJSON(meterType);
-                    sendAlarmParam.setMeterType( Optional.ofNullable(json).map(jsonObject1 -> jsonObject1.getString("meterType")).orElse(""));
+                    sendAlarmParam.setMeterType(Optional.ofNullable(json).map(jsonObject1 -> jsonObject1.getString("meterType")).orElse(""));
                     AlarmInfo alarmInfo = new AlarmInfo();
                     alarmInfo.setAlarmStatus(Optional.ofNullable(jsonObject.getString("alarmStatus")).orElse(""));
                     alarmInfo.setAlarmTime(Optional.ofNullable(jsonObject.getString("alarmTime")).orElse(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss").format(LocalDateTime.now())));
@@ -399,7 +438,7 @@ public class MeterDataServiceImpl implements MeterDataService {
                 }
         );
         String ss = HttpClientUtil.returnPost(apiParam.getReturnUrl() + apiParam.getSendAlarm(), JSON.toJSONString(sendAlarmParam));
-        System.out.println( ss);
+        System.out.println(ss);
         return new FesResponse().data(sendAlarmParam);
     }
 

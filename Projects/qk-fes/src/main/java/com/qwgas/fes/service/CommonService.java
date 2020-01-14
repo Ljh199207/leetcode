@@ -15,5 +15,4 @@ public interface CommonService {
      * @return
      */
     FesResponse getToken(JSONObject jsonParam) throws Exception;
-
 }
