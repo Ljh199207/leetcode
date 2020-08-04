@@ -1,0 +1,12 @@
+server:
+  port: 8764
+spring:
+  application:
+    name: service-ribbon
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://127.0.0.1:8761/eureka/
+  instance:
+    instance-id: ${spring.cloud.client.ip-address}:${spring.application.name}:${server.port}
+    prefer-ip-address: true
