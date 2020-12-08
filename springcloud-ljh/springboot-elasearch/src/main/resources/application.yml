@@ -28,7 +28,7 @@ aliyun:
   oss:
     endpoint: oss-cn-beijing.aliyuncs.com # oss对外服务的访问域名
     accessKeyId: LTAI4GHgYFrU1NEMEyViWe7K
-    accessKeySecret: dk8R0KzevJBAnDBVMFkZRDwsZv0rkx
+    accessKeySecret:
     bucketName: esljh-oss
     policy:
       expire: 300 # 签名有效期(S)
